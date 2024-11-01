@@ -1,7 +1,7 @@
 {
 	"scripts": {
 		"start": "cargo run --release",
-		"up": "pm2 start 'npm start' --name 'deepdive' --watch",
+		"up": "pm2 start 'npm start' --name 'gorilla scan' --watch",
 		"down": "pm2 stop 0 --watch && pm2 delete 0"
 	}
 }
