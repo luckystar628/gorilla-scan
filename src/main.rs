@@ -86,12 +86,13 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
             info!("Received command /s for token: {}", token_adr);
             
             let debank_client = Client::new();
-            let debank_api_key = env::var("DEBANK_API_KEY").expect("API_KEY not set");
+            let dextools_api_key = env::var("DEXTOOLS_API_KEY").expect("API_KEY not set");
+            let dextools_api_plan = env::var("DEXTOOLS_API_PLAN").expect("API_PLAN not set");
 
-            match get_token_data(debank_client.clone(), &debank_api_key, &token_adr).await {
+            match get_token_data(debank_client.clone(), &dextools_api_key, &dextools_api_plan, &token_adr).await {
                 Ok(token_data) => {
                     // tokio::time::sleep(time::Duration::from_secs(3)).await; //delay for 3 sec to avoid conflict request
-                    let token_holders = get_top_50_holders(debank_client.clone(), &debank_api_key, &token_adr).await.unwrap();
+                    let token_holders = get_top_50_holders(debank_client.clone(), &dextools_api_key, &dextools_api_plan, &token_adr).await.unwrap();
                     let text =
                         make_token_overview_message(&token_data, &token_holders)
                             .await?;
@@ -112,16 +113,15 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
 }
 
 
-async fn get_token_data(client: Client, api_key: &str, token_address: &str) -> Result<TokenOverviewData, serde_json::Error> {
+async fn get_token_data(client: Client, api_key: &str, api_plan: &str, token_address: &str) -> Result<TokenOverviewData, serde_json::Error> {
     let url = format!(
-        "https://pro-openapi.debank.com/v1/token?chain_id={}&id={}",
-        "ape", token_address
+        "https://public-api.dextools.io/{}/v2/token/{}/{}",
+        api_plan, "apechain", token_address
     );
 
     let response = client
         .get(&url)
-        .header("AccessKey", api_key)
-        // .header("x-chain", "sui")
+        .header("X-API-KEY", api_key)
         .send()
         .await
         .unwrap();
@@ -133,15 +133,55 @@ async fn get_token_data(client: Client, api_key: &str, token_address: &str) -> R
     }
 }
 
+async fn get_token_info(client: Client, api_key: &str, api_plan: &str, token_address: &str) -> Result<TokenOverviewData, serde_json::Error> {
+    let url = format!(
+        "https://public-api.dextools.io/{}/v2/token/{}/info",
+        api_plan, "apechain", token_address
+    );
+
+    let response = client
+    .get(&url)
+    .header("X-API-KEY", api_key)
+    .send()
+    .await
+    .unwrap();
+
+    let text = response.text().await.unwrap();
+    match serde_json::from_str(&text) {
+        Ok(obj) => Ok(obj),
+        Err(e) =>  Err(e),
+    }
+}
+
+async fn get_token_price_history(client: Client, api_key: &str, api_plan: &str, token_address: &str) -> Result<TokenOverviewData, serde_json::Error> {
+    let url = format!(
+        "https://public-api.dextools.io/{}/v2/token/{}/price",
+        api_plan, "apechain", token_address
+    );
+
+    let response = client
+    .get(&url)
+    .header("X-API-KEY", api_key)
+    .send()
+    .await
+    .unwrap();
+
+    let text = response.text().await.unwrap();
+    match serde_json::from_str(&text) {
+        Ok(obj) => Ok(obj),
+        Err(e) =>  Err(e),
+    }
+}
+
 async fn get_top_50_holders(
     client: Client,
     api_key: &str,
+    api_plan: &str,
     token_address: &str,
 ) -> Result<TokenTopHolders, serde_json::Error> {
     let url = format!(
-        "https://pro-openapi.debank.com/v1/token/top_holders?chain_id={}&id={}&start=0&limit=50",
-        "ape",
-        token_address
+        "https://public-api.dextools.io/{}/v2/token/{}/top_holders?start=0&limit=50",
+        api_plan, "apechain", token_address
     );
     
     let response = client
