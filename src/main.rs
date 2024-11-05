@@ -1,6 +1,7 @@
 pub mod token_overview;
 pub mod token_info;
 pub mod token_price_history;
+pub mod token_top50_holders;
 use tokio::time;
 use dotenv::dotenv;
 use log::{error, info};
@@ -16,7 +17,7 @@ use teloxide::{
 use token_overview::{TokenOverviewData, TokenOverview};
 use token_info::TokenInfo;
 use token_price_history::TokenPriceHistory;
-
+use token_top50_holders::{TokenTopHolders, HolderInfo};
 
 #[derive(BotCommands, Clone)]
 #[command(
@@ -87,18 +88,23 @@ async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
             let token_adr = message_text.replace("/s ", "");
             info!("Received command /s for token: {}", token_adr);
             
-            let dextools_client = Client::new();
+            let request_client = Client::new();
             let dextools_api_key = env::var("DEXTOOLS_API_KEY").expect("API_KEY not set");
             let dextools_api_plan = env::var("DEXTOOLS_API_PLAN").expect("API_PLAN not set");
+            let debank_api_key = env::var("DEBANK_API_KEY").expect("API_KEY not set");
 
-            match get_token_data(dextools_client.clone(), &dextools_api_key, &dextools_api_plan, &token_adr).await {
+            match get_token_data(request_client.clone(), &dextools_api_key, &dextools_api_plan, &token_adr).await {
                 Ok(token_data) => {
                 tokio::time::sleep(time::Duration::from_secs(1)).await; //delay for 1 sec to avoid conflict request
-                let token_info = get_token_info(dextools_client.clone(), &dextools_api_key, &dextools_api_plan, &token_adr).await.unwrap();
+                let token_info = get_token_info(request_client.clone(), &dextools_api_key, &dextools_api_plan, &token_adr).await.unwrap();
                 tokio::time::sleep(time::Duration::from_secs(1)).await; //delay for 1 sec to avoid conflict request
-                let token_price_history = get_token_price_history(dextools_client.clone(), &dextools_api_key, &dextools_api_plan, &token_adr).await.unwrap();
+                let token_price_history = get_token_price_history(request_client.clone(), &dextools_api_key, &dextools_api_plan, &token_adr).await.unwrap();
+                tokio::time::sleep(time::Duration::from_secs(1)).await; //delay for 1 sec to avoid conflict request
+                let token_top_holders = get_top_50_holders(request_client.clone(), &debank_api_key, &token_adr).await.unwrap();
+
+                //make message
                 let text =
-                    make_token_overview_message(&token_data, &token_info, &token_price_history)
+                    make_token_overview_message(&token_data, &token_info, &token_price_history, &token_top_holders)
                         .await?;
                     bot.send_message(msg.chat.id, text)  // Changed "text" to text
                         .parse_mode(teloxide::types::ParseMode::Html)
@@ -176,10 +182,35 @@ async fn get_token_price_history(client: Client, api_key: &str, api_plan: &str, 
     }
 }
 
+async fn get_top_50_holders(
+    client: Client,
+    api_key: &str,
+    token_address: &str,
+) -> Result<TokenTopHolders, serde_json::Error> {
+    let url = format!(
+        "https://pro-openapi.debank.com/v1/token/top_holders?chain_id={}&id={}&start=0&limit=50",
+        "ape",
+        token_address
+    );
+    
+    let response = client
+        .get(&url)
+        .header("AccessKey", api_key)
+        .send()
+        .await
+        .unwrap();
+
+    let text = response.text().await.unwrap();
+    
+    let holders: Vec<HolderInfo> = serde_json::from_str(&text)?;
+    Ok(TokenTopHolders { holders })
+}
+
 async fn make_token_overview_message(
     token_data: &TokenOverviewData,
     token_info: &TokenInfo,
     token_price_history: &TokenPriceHistory,
+    token_top_holders: &TokenTopHolders,
 ) -> Result<String, reqwest::Error> {
     //token overview
     let token_address = &token_data.address;
@@ -268,19 +299,75 @@ async fn make_token_overview_message(
     let variation_6h = num_floating_point(&token_price_history.data.variation_6h.unwrap_or_default(), 2);
     let variation_24h = num_floating_point(&token_price_history.data.variation_24h.unwrap_or_default(), 2);
 
+     //top holders Info
+     let holders_count = token_top_holders.holders.len();
+     let mut sum_usd_amount_top_10_holders = 0.0;
+     let mut holders_text = String::from("\n");
+     let mut top_num = 0;
+     let mut index_on_a_line = 0;
+     let mut num_whale = 0;
+     let mut num_largefish = 0;
+     let mut num_bigfish = 0;
+     let mut num_smallfish = 0;
+     let mut num_shrimp = 0;
+ 
+     for holder in &token_top_holders.holders {
+         let holder_address = &holder.holder_address;
+         let usd_amount = holder.usd_amount;
+ 
+         top_num += 1;
+         if top_num <= 10 {
+             sum_usd_amount_top_10_holders += usd_amount;
+         }
+ 
+         let whale_symbol = if usd_amount > 100000.0 {
+             num_whale += 1;
+             "🐳"
+         } else if usd_amount > 50000.0 {
+             num_largefish += 1;
+             "🦈"
+         } else if usd_amount > 10000.0 {
+             num_bigfish += 1;
+             "🐬"
+         } else if usd_amount > 1000.0 {
+             num_smallfish += 1;
+             "🐟"
+         } else {
+             num_shrimp += 1;
+             "🦐"
+         };
+ 
+         let link = format!("<a href=\"https://suiscan.xyz/mainnet/account/{holder_address}?Amount={usd_amount}\">{whale_symbol}</a>");
+         if index_on_a_line == 9 {
+             holders_text = holders_text + &link + "\n";
+             index_on_a_line = 0;
+         } else {
+             holders_text = holders_text + &link;
+             index_on_a_line += 1;
+         }
+ 
+         if top_num == token_top_holders.holders.len() {
+             holders_text += &format!("\n🐳 ( > $100K ) :  {num_whale}\n🦈 ( $50K - $100K ) :  {num_largefish}\n🐬 ( $10K - $50K ) :  {num_bigfish}\n🐟 ( $1K - $10K ) :  {num_smallfish}\n🦐 ( $0 - $1K ) :  {num_shrimp}\n");
+         }
+     }
+    let sum_usd_amount_top_10_holders = controll_big_float(sum_usd_amount_top_10_holders);
+
     let text = format!("
 <a href=\"https://dexscreener.com/apechain/{token_address}\">🚀</a> <a href=\"{logo_url}\">{name}  </a>{symbol}
 🌐 ApeChain @ Camelot
 💰 USD:  ${price}
 💎 FDV:  ${fdv}
-👩‍👧‍👦 Holders: {holders_count}
 📈 Price history
-    <i>1H:</i> ${price_1h}/{variation_1h}%  <i>6H:</i> ${price_6h}/{variation_6h}%  <i>24H:</i> ${price_24h}/{variation_24h}% 
- 
+        └ <i>1H:</i>    ${price_1h} / {variation_1h}%  
+        └ <i>6H:</i>    ${price_6h} / {variation_6h}%  
+        └ <i>24H:</i>  ${price_24h} / {variation_24h}% 
+🖨 Mint: ✅ ⋅ LP: 🔥
+🧰 More: {social_text}
+👩‍👧‍👦 Holders: {holders_count}
+        └ Top 10 Holders :  ${sum_usd_amount_top_10_holders}
+{holders_text} 
 <code>{token_address}</code>
-<a href=\"https://dexscreener.com/apechain/{token_address}\">DEX </a><a href=\"https://apescan.io/address/{token_address}\">EXP</a>
-
-📱 Social:  {social_text}
+<a href=\"https://dexscreener.com/apechain/{token_address}\">DEX</a> <a href=\"https://apescan.io/address/{token_address}\">EXP</a>
 
 ❎ <a href=\"https://twitter.com/search?q={token_address}=typed_query&f=live\"> Search on 𝕏 </a>
 📈 <a href=\"https://apescan.io/token/{token_address}\"> APE Scan </a>
@@ -297,9 +384,9 @@ fn num_floating_point(num: &f64, length: i32) -> f64 {
 }
 
 fn controll_big_float(num: f64) -> String {
-    if num > 1000000.0 {
-        format!("{:.1}M", num / 1000000.0)
-    } else if num > 1000.0 {
+    if num > 1_000_000.0 {
+        format!("{:.1}M", num / 1_000_000.0)
+    } else if num > 1_000.0 {
         format!("{:.2}K", num / 1000.0)
     } else {
         format!("{:.3}", num)
