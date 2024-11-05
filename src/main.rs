@@ -198,43 +198,43 @@ async fn make_token_overview_message(
     }
     let bitbucket = &token_data.social_info.bitbucket.clone().unwrap_or_default();
     if !bitbucket.is_empty() {
-        social_text += &format!(" <a href=\"{bitbucket}\">🔩 </a>");
+        social_text += &format!(" <a href=\"{bitbucket}\">🗃️ </a>");
     }
     let discord = &token_data.social_info.discord.clone().unwrap_or_default();
     if !discord.is_empty() {
-        social_text += &format!(" <a href=\"{discord}\">💬 </a>");
+        social_text += &format!(" <a href=\"{discord}\">💭 </a>");
     }
     let facebook = &token_data.social_info.facebook.clone().unwrap_or_default();
     if !facebook.is_empty() {
-        social_text += &format!(" <a href=\"{facebook}\">👥 </a>");
+        social_text += &format!(" <a href=\"{facebook}\">ⓕ </a>");
     }
     let github = &token_data.social_info.github.clone().unwrap_or_default();
     if !github.is_empty() {
-        social_text += &format!(" <a href=\"{github}\">👥 </a>");
+        social_text += &format!(" <a href=\"{github}\">🐱 </a>");
     }
     let instagram = &token_data.social_info.instagram.clone().unwrap_or_default();
     if !instagram.is_empty() {
-        social_text += &format!(" <a href=\"{instagram}\">👥 </a>");
+        social_text += &format!(" <a href=\"{instagram}\">📸 </a>");
     }
     let linkedin = &token_data.social_info.linkedin.clone().unwrap_or_default();
     if !linkedin.is_empty() {
-        social_text += &format!(" <a href=\"{linkedin}\">👥 </a>");
+        social_text += &format!(" <a href=\"{linkedin}\">ℹ️ </a>");
     }
     let medium = &token_data.social_info.medium.clone().unwrap_or_default();
     if !medium.is_empty() {
-        social_text += &format!(" <a href=\"{medium}\">💪 </a>");
+        social_text += &format!(" <a href=\"{medium}\">Ⓜ️ </a>");
     }
     let reddit = &token_data.social_info.reddit.clone().unwrap_or_default();
     if !reddit.is_empty() {
-        social_text += &format!(" <a href=\"{reddit}\">🎨</a>");
+        social_text += &format!(" <a href=\"{reddit}\">🎯</a>");
     }
     let telegram = &token_data.social_info.telegram.clone().unwrap_or_default();
     if !telegram.is_empty() {
-        social_text += &format!(" <a href=\"{telegram}\">🐦 </a>");
+        social_text += &format!(" <a href=\"{telegram}\">🕊️ </a>");
     }
     let tiktok = &token_data.social_info.tiktok.clone().unwrap_or_default();
     if !tiktok.is_empty() {
-        social_text += &format!(" <a href=\"{tiktok}\">🫧 </a>");
+        social_text += &format!(" <a href=\"{tiktok}\">🎬 </a>");
     }
     let twitter = &token_data.social_info.twitter.clone().unwrap_or_default();
     if !twitter.is_empty() {
@@ -242,11 +242,11 @@ async fn make_token_overview_message(
     }
     let website = &token_data.social_info.website.clone().unwrap_or_default();
     if !website.is_empty() {
-        social_text += &format!(" <a href=\"{website}\">🌍 </a>");
+        social_text += &format!(" <a href=\"{website}\">🌐 </a>");
     }
     let youtube = &token_data.social_info.youtube.clone().unwrap_or_default();
     if !youtube.is_empty() {
-        social_text += &format!(" <a href=\"{youtube}\">Yu</a>");
+        social_text += &format!(" <a href=\"{youtube}\">🎥</a>");
     }
 
 
@@ -280,7 +280,7 @@ async fn make_token_overview_message(
 <code>{token_address}</code>
 <a href=\"https://dexscreener.com/apechain/{token_address}\">DEX </a><a href=\"https://apescan.io/address/{token_address}\">EXP</a>
 
-Social:  {social_text}
+📱 Social:  {social_text}
 
 ❎ <a href=\"https://twitter.com/search?q={token_address}=typed_query&f=live\"> Search on 𝕏 </a>
 📈 <a href=\"https://apescan.io/token/{token_address}\"> APE Scan </a>
