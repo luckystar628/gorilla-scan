@@ -275,7 +275,7 @@ async fn make_token_overview_message(
 💎 FDV:  ${fdv}
 👩‍👧‍👦 Holders: {holders_count}
 📈 Price history
-    <i>1H:</i>  ${price_1h}/{variation_1h}%  <i>6H:</i>  ${price_6h}/{variation_6h}%  <i>24H:</i>  ${price_24h}/{variation_24h}% 
+    <i>1H:</i> ${price_1h}/{variation_1h}%  <i>6H:</i> ${price_6h}/{variation_6h}%  <i>24H:</i> ${price_24h}/{variation_24h}% 
  
 <code>{token_address}</code>
 <a href=\"https://dexscreener.com/apechain/{token_address}\">DEX </a><a href=\"https://apescan.io/address/{token_address}\">EXP</a>
