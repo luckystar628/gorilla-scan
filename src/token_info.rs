@@ -1,14 +1,15 @@
 use serde::Deserialize;
 use serde::Serialize;
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TokenPriceInfo {
-    pub status_code: i32,
-    pub data: TokenPriceInfoData,
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub struct TokenInfo {
+    #[serde(rename = "statusCode")]
+    pub status_code: u32,
+    pub data: TokenInfoData,
 }
 
 #[derive(Default, Debug, Clone,  Serialize, Deserialize)]
-pub struct TokenPriceInfoData {
+pub struct TokenInfoData {
     #[serde(rename = "totalSupply")]
     pub total_supply: f64,
     #[serde(default)]

@@ -1,13 +1,11 @@
-use serde::Deserialize;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TokenOverview {
-    pub status_code: i32,
     pub data: TokenOverviewData,
 }
 
-#[derive(Default, Debug, Clone,  Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TokenOverviewData {
     pub address: String,
     pub name: String,
@@ -16,10 +14,13 @@ pub struct TokenOverviewData {
     pub logo_url: String,
     pub description: String,
     pub decimals: i32,
+    #[serde(rename = "socialInfo")]  
     pub social_info: SocialInfo,
+    #[serde(rename = "creationDate")]
+    pub creation_date: Option<String>,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SocialInfo {
     pub email: Option<String>,
     pub bitbucket: Option<String>,
@@ -28,7 +29,7 @@ pub struct SocialInfo {
     pub github: Option<String>,
     pub instagram: Option<String>,
     pub linkedin: Option<String>,
-    pub medium: Option<String>,
+    pub medium: Option<String>, 
     pub reddit: Option<String>,
     pub telegram: Option<String>,
     pub tiktok: Option<String>,
