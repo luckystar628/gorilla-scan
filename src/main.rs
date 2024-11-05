@@ -238,7 +238,7 @@ async fn make_token_overview_message(
     }
     let twitter = &token_data.social_info.twitter.clone().unwrap_or_default();
     if !twitter.is_empty() {
-        social_text += &format!(" <a href=\"{twitter}\">𝕏</a>");
+        social_text += &format!(" <a href=\"{twitter}\">𝕏 </a>");
     }
     let website = &token_data.social_info.website.clone().unwrap_or_default();
     if !website.is_empty() {
@@ -269,22 +269,19 @@ async fn make_token_overview_message(
     let variation_24h = num_floating_point(&token_price_history.data.variation_24h.unwrap_or_default(), 2);
 
     let text = format!("
-<a href=\"https://dexscreener.com/apechain/{token_address}\">🚀</a> <a href=\"{logo_url}\">{name} </a>{symbol}
-🌐  ApeChain @ Camelot
+<a href=\"https://dexscreener.com/apechain/{token_address}\">🚀</a> <a href=\"{logo_url}\">{name}  </a>{symbol}
+🌐 ApeChain @ Camelot
 ➖➖➖➖➖➖
-💰  USD: ${price}
-💎 FDV: ${fdv}
+💰 USD:  ${price}
+💎 FDV:  ${fdv}
 👩‍👧‍👦 Holders: {holders_count}
-📈Price history
-    1H: {variation_1h}% ⋅ ${price_1h} 🅑 {price_1h} 🅢 {price_1h}
-    6H: {variation_6h}% ⋅ ${price_6h} 🅑 {price_6h} 🅢 {price_6h}
-    24H: {variation_24h}% ⋅ ${price_24h} 🅑 {price_24h} 🅢 {price_24h}
-
+📈 Price history
+    <b>1H</b>:  ${price_1h}/{variation_1h}% | <b>6H</b>:  ${price_6h}/{variation_6h}% | <b>24H</b>:  ${price_24h}/{variation_24h}% 
+ 
 <code>{token_address}</code>
-<a href=\"https://dexscreener.com/apechain/{token_address}\">DEX⋅</a><a href=\"https://apescan.io/address/{token_address}\">EXP</a>
+<a href=\"https://dexscreener.com/apechain/{token_address}\">DEX </a><a href=\"https://apescan.io/address/{token_address}\">EXP</a>
 
-Social: {social_text}
-
+Social:  {social_text}
 
 ❎ <a href=\"https://twitter.com/search?q={token_address}=typed_query&f=live\"> Search on 𝕏 </a>
 📈 <a href=\"https://apescan.io/token/{token_address}\"> APE Scan </a>
