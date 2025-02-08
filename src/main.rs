@@ -1,24 +1,26 @@
+pub mod native_token;
+pub mod token_audit;
+pub mod token_holders;
 pub mod token_info;
 pub mod token_price_history;
-pub mod token_holders;
-pub mod token_audit;
-pub mod native_token;
 
+use chrono::{DateTime, Utc};
 use dotenv::dotenv;
 use log::error;
+use native_token::*;
 use reqwest::Client;
 use serde_json;
 use std::env;
-use teloxide::{
-    prelude::*, types::{Me, MessageKind, ParseMode}, utils::command::BotCommands
-};
 use teloxide::types::LinkPreviewOptions;
-use chrono::{DateTime, Utc};
+use teloxide::{
+    prelude::*,
+    types::{Me, MessageKind, ParseMode},
+    utils::command::BotCommands,
+};
+use token_audit::*;
+use token_holders::*;
 use token_info::*;
 use token_price_history::*;
-use token_holders::*;
-use token_audit::*;
-use native_token::*;
 
 #[derive(BotCommands, Clone)]
 #[command(
@@ -62,45 +64,47 @@ async fn message_handler(bot: Bot, msg: Message, me: Me) -> ResponseResult<()> {
         bot.send_message(msg.chat.id, data.web_app_data.data)
             .await?;
     } else if let Some(text) = msg.text() {
+        let chat_type = match msg.chat.kind {
+            teloxide::types::ChatKind::Private { .. } => "a private chat".to_string(),
+            teloxide::types::ChatKind::Public(ref public_chat) => match public_chat.kind {
+                teloxide::types::PublicChatKind::Group { .. } => "a group".to_string(),
+                teloxide::types::PublicChatKind::Supergroup { .. } => "a supergroup".to_string(),
+                teloxide::types::PublicChatKind::Channel { .. } => "a channel".to_string(),
+            },
+        };
 
-            let chat_type = match msg.chat.kind {
-                teloxide::types::ChatKind::Private { .. } => {
-                    "a private chat".to_string()
-                }
-                teloxide::types::ChatKind::Public(ref public_chat) => {
-                    match public_chat.kind {
-                        teloxide::types::PublicChatKind::Group { .. } => "a group".to_string(),
-                        teloxide::types::PublicChatKind::Supergroup { .. } => "a supergroup".to_string(),
-                        teloxide::types::PublicChatKind::Channel { .. } => "a channel".to_string(),
-                    }
-                }
-            };
-
-            if chat_type == "a group" || chat_type == "a supergroup" {
-                let username = msg.from()
-                                    .and_then(|user| user.username.clone())
-                                    .unwrap_or_else(|| {
-                                        msg.from()
-                                            .map(|user| user.first_name.clone())
-                                            .unwrap_or_else(|| "Unknown User".to_string())
-                                    });
-                if let Ok(cmd) = Command::parse(text, me.username()) {
-                    answer_command(bot, msg, cmd, username).await?;
-                } else {
-                    answer_message(bot, msg).await?;
-                }
+        if chat_type == "a group" || chat_type == "a supergroup" {
+            let username = msg
+                .from()
+                .and_then(|user| user.username.clone())
+                .unwrap_or_else(|| {
+                    msg.from()
+                        .map(|user| user.first_name.clone())
+                        .unwrap_or_else(|| "Unknown User".to_string())
+                });
+            if let Ok(cmd) = Command::parse(text, me.username()) {
+                answer_command(bot, msg, cmd, username).await?;
             } else {
-                bot.send_message(msg.chat.id, "This message is not available in this chat type. Please try again in group chat.")
-                    .await?;
+                answer_message(bot, msg).await?;
+            }
+        } else {
+            bot.send_message(
+                msg.chat.id,
+                "This message is not available in this chat type. Please try again in group chat.",
+            )
+            .await?;
         }
-        
     }
 
     Ok(())
 }
 
-async fn answer_command(bot: Bot, msg: Message, cmd: Command, username: String) -> ResponseResult<()> {
-
+async fn answer_command(
+    bot: Bot,
+    msg: Message,
+    cmd: Command,
+    username: String,
+) -> ResponseResult<()> {
     match cmd {
         Command::Help => {
             bot.send_message(msg.chat.id, Command::descriptions().to_string())
@@ -111,8 +115,7 @@ async fn answer_command(bot: Bot, msg: Message, cmd: Command, username: String) 
                 .await?;
         }
         _ => {
-            bot.send_message(msg.chat.id, "Invalid command")
-                .await?;
+            bot.send_message(msg.chat.id, "Invalid command").await?;
         }
     }
     Ok(())
@@ -120,58 +123,64 @@ async fn answer_command(bot: Bot, msg: Message, cmd: Command, username: String) 
 
 async fn answer_message(bot: Bot, msg: Message) -> ResponseResult<()> {
     let token_adr = msg.text().unwrap();
-    if token_adr.starts_with("0x") && token_adr.len() == 42 && token_adr[2..].chars().all(|c| c.is_ascii_hexdigit()) {
-                
+    if token_adr.starts_with("0x")
+        && token_adr.len() == 42
+        && token_adr[2..].chars().all(|c| c.is_ascii_hexdigit())
+    {
         let request_client = Client::new();
         let dextools_api_key = env::var("DEXTOOLS_API_KEY").expect("API_KEY not set");
         let dextools_api_plan = env::var("DEXTOOLS_API_PLAN").expect("API_PLAN not set");
-        
+
         match get_token_info(request_client.clone(), &token_adr).await {
             Ok(token_info) => {
-                let token_price_history = get_token_price_history(request_client.clone(), &dextools_api_key, &dextools_api_plan, &token_adr).await.unwrap_or_default();
-                let token_holders = get_holders(request_client.clone(), &token_adr).await.unwrap_or_default();
+                let token_price_history = get_token_price_history(
+                    request_client.clone(),
+                    &dextools_api_key,
+                    &dextools_api_plan,
+                    &token_adr,
+                )
+                .await
+                .unwrap_or_default();
+                let token_holders = get_holders(request_client.clone(), &token_adr)
+                    .await
+                    .unwrap_or_default();
                 // let token_audit = get_token_audit(request_client.clone(), &dextools_api_key, &dextools_api_plan, &token_adr).await.unwrap_or_default();
                 //make message
                 let text =
-                make_token_overview_message(&token_info, &token_price_history, &token_holders)
+                    make_token_overview_message(&token_info, &token_price_history, &token_holders)
                         .await?;
-                bot.send_message(msg.chat.id, text)  // Changed "text" to text
-                        .parse_mode(ParseMode::Html)
-                        .link_preview_options(LinkPreviewOptions {
-                            is_disabled: true,
-                            prefer_small_media: false,
-                            prefer_large_media: false,
-                            show_above_text: false,
-                            url: None,
-                        })
-                        .send()
-                        .await?;
+                bot.send_message(msg.chat.id, text) // Changed "text" to text
+                    .parse_mode(ParseMode::Html)
+                    .link_preview_options(LinkPreviewOptions {
+                        is_disabled: true,
+                        prefer_small_media: false,
+                        prefer_large_media: false,
+                        show_above_text: false,
+                        url: None,
+                    })
+                    .send()
+                    .await?;
             }
             Err(e) => {
                 error!("Error fetching token overview: {}", e);
                 bot.send_message(msg.chat.id, "Invalid token address")
-                .await?;
+                    .await?;
             }
         }
     }
     Ok(())
 }
 
+async fn get_token_info(
+    client: Client,
+    token_address: &str,
+) -> Result<TokenInfo, serde_json::Error> {
+    let url = format!("https://ape.express/api/tokens/{}", token_address);
 
-async fn get_token_info(client: Client, token_address: &str) -> Result<TokenInfo, serde_json::Error> {
-    let url = format!(
-        "https://ape.express/api/tokens/{}",
-        token_address
-    );
-
-    let response = client
-    .get(&url)
-    .send()
-    .await
-    .unwrap();
+    let response = client.get(&url).send().await.unwrap();
 
     let text = match response.text().await {
-        Ok(text) => {text},
+        Ok(text) => text,
         Err(e) => {
             println!("Error fetching token overview: {}", e);
             // format!(e.to_string());
@@ -179,33 +188,36 @@ async fn get_token_info(client: Client, token_address: &str) -> Result<TokenInfo
         }
     };
     match serde_json::from_str(&text) {
-        Ok(obj) => {
-            Ok(obj)
-        },
-        Err(e) =>  {
+        Ok(obj) => Ok(obj),
+        Err(e) => {
             println!("Error parsing JSON: {}", e);
             Err(e)
-        },
+        }
     }
 }
 
-async fn get_token_price_history(client: Client, api_key: &str, api_plan: &str, token_address: &str) -> Result<TokenPriceHistory, serde_json::Error> {
+async fn get_token_price_history(
+    client: Client,
+    api_key: &str,
+    api_plan: &str,
+    token_address: &str,
+) -> Result<TokenPriceHistory, serde_json::Error> {
     let url = format!(
         "https://public-api.dextools.io/{}/v2/token/{}/{}/price",
         api_plan, "apechain", token_address
     );
 
     let response = client
-    .get(&url)
-    .header("X-API-KEY", api_key)
-    .send()
-    .await
-    .unwrap();
+        .get(&url)
+        .header("X-API-KEY", api_key)
+        .send()
+        .await
+        .unwrap();
 
     let text = response.text().await.unwrap();
     match serde_json::from_str(&text) {
         Ok(obj) => Ok(obj),
-        Err(e) =>  Err(e),
+        Err(e) => Err(e),
     }
 }
 
@@ -232,20 +244,13 @@ async fn get_holders(
     client: Client,
     token_address: &str,
 ) -> Result<TokenTopHolders, serde_json::Error> {
-    let url = format!(
-        "https://ape.express/api/tokens/{}/holders",
-        token_address
-    );
-    
-    let response = client
-        .get(&url)
-        .send()
-        .await
-        .unwrap();
+    let url = format!("https://ape.express/api/tokens/{}/holders", token_address);
+
+    let response = client.get(&url).send().await.unwrap();
 
     let text = response.text().await.unwrap();
-    
-    let holders:TokenTopHolders = serde_json::from_str(&text).unwrap_or_default();
+
+    let holders: TokenTopHolders = serde_json::from_str(&text).unwrap_or_default();
     Ok(holders)
 }
 
@@ -255,9 +260,8 @@ async fn make_token_overview_message(
     token_top_holders: &TokenTopHolders,
     // token_audit: &TokenAudit,
 ) -> Result<String, reqwest::Error> {
-
     let token_decimal = 18;
-    
+
     // Get native token price
     let native_token_price = match get_native_token_price().await {
         Ok(token) => token.price.parse::<f64>().unwrap_or_default() / 10_f64.powi(8),
@@ -269,19 +273,30 @@ async fn make_token_overview_message(
     // let token_launch_at = &token_info.launch_at;
     let token_name = &token_info.name;
     let token_symbol = &token_info.symbol;
-    let token_total_supply = token_info.total_supply.parse::<f64>().unwrap_or_default() / 10_f64.powi(token_decimal as i32); 
+    let token_total_supply = token_info.total_supply.parse::<f64>().unwrap_or_default()
+        / 10_f64.powi(token_decimal as i32);
     let token_block_timestamp = &token_info.block_timestamp;
-    let token_price = num_floating_point(&(token_info.price.parse::<f64>().unwrap_or_default() * native_token_price), 5);
+    let token_price = num_floating_point(
+        &(token_info.price.parse::<f64>().unwrap_or_default() * native_token_price),
+        5,
+    );
     let token_liquidity = token_info.liquidity.clone().unwrap_or_default();
-    let liquidity = controll_big_float(token_liquidity.native_reserve.parse::<f64>().unwrap_or_default() / 10_f64.powi(token_decimal as i32) * native_token_price * 2.0);
-    
+    let liquidity = controll_big_float(
+        token_liquidity
+            .native_reserve
+            .parse::<f64>()
+            .unwrap_or_default()
+            / 10_f64.powi(token_decimal as i32)
+            * native_token_price
+            * 2.0,
+    );
+
     let market_cap = controll_big_float(token_total_supply * token_price);
     let age = if let Some(block_time) = token_block_timestamp {
         calculate_age(block_time)
     } else {
         "🔥".to_string()
     };
-
 
     //social info
     let mut social_text = String::new();
@@ -307,79 +322,91 @@ async fn make_token_overview_message(
             }
         }
     }
-   
+
     //top price history
     // let price = num_floating_point(&token_price_history.data.price, 3)  ;
     let price_1h = num_floating_point(&token_price_history.data.price_1h.unwrap_or_default(), 3);
     let price_6h = num_floating_point(&token_price_history.data.price_6h.unwrap_or_default(), 3);
     let price_24h = num_floating_point(&token_price_history.data.price_24h.unwrap_or_default(), 3);
-    let variation_1h = num_floating_point(&token_price_history.data.variation_1h.unwrap_or_default(), 2);
-    let variation_6h = num_floating_point(&token_price_history.data.variation_6h.unwrap_or_default(), 2);
-    let variation_24h = num_floating_point(&token_price_history.data.variation_24h.unwrap_or_default(), 2);
+    let variation_1h = num_floating_point(
+        &token_price_history.data.variation_1h.unwrap_or_default(),
+        2,
+    );
+    let variation_6h = num_floating_point(
+        &token_price_history.data.variation_6h.unwrap_or_default(),
+        2,
+    );
+    let variation_24h = num_floating_point(
+        &token_price_history.data.variation_24h.unwrap_or_default(),
+        2,
+    );
 
     //top holders Info
-     let holders_count = token_top_holders.total_holders.parse::<u32>().unwrap_or_default();
-     let mut sum_usd_amount_top_10_holders = 0.0;
-     let mut holders_text = String::from("\n");
-     let mut top_num = 0;
-     let mut index_on_a_line = 0;
-     let mut num_whale = 0;
-     let mut num_largefish = 0;
-     let mut num_bigfish = 0;
-     let mut num_smallfish = 0;
-     let mut num_shrimp = 0;
-    
-     if holders_count >= 50  {
+    let holders_count = token_top_holders
+        .total_holders
+        .parse::<u32>()
+        .unwrap_or_default();
+    let mut sum_usd_amount_top_10_holders = 0.0;
+    let mut holders_text = String::from("\n");
+    let mut top_num = 0;
+    let mut index_on_a_line = 0;
+    let mut num_whale = 0;
+    let mut num_largefish = 0;
+    let mut num_bigfish = 0;
+    let mut num_smallfish = 0;
+    let mut num_shrimp = 0;
+
+    if holders_count >= 50 {
         holders_text += &format!("<u><b><i>50 Top Holders Map</i></b></u>\n        ");
-     } else if holders_count > 0{
+    } else if holders_count > 0 {
         holders_text += &format!("<u><b><i>{holders_count} Top Holders Map</i></b></u>\n        ");
-     }
-     for holder in &token_top_holders.list {
-         let holder_address = &holder.address;
-         let balance = holder.balance.parse::<f64>().unwrap_or_default();
-         let usd_amount = balance / 10_f64.powi(token_decimal as i32) * token_price;
- 
-         top_num += 1;
-         if top_num <= 10 {
-             sum_usd_amount_top_10_holders += usd_amount;
-         }
- 
-         let whale_symbol = if usd_amount > 100000.0 {
-             num_whale += 1;
-             "🐳"
-         } else if usd_amount > 50000.0 {
-             num_largefish += 1;
-             "🦈"
-         } else if usd_amount > 10000.0 {
-             num_bigfish += 1;
-             "🐬"
-         } else if usd_amount > 1000.0 {
-             num_smallfish += 1;
-             "🐟"
-         } else {
-             num_shrimp += 1;
-             "🦐"
-         };
- 
-         let link = format!("<a href=\"https://apescan.io/address/{holder_address}?Amount={usd_amount}\">{whale_symbol}</a>");
-         if index_on_a_line == 9 {
-             holders_text = holders_text + &link + "\n        ";
-             index_on_a_line = 0;
-         } else {
-             holders_text = holders_text + &link;
-             index_on_a_line += 1;
-         }
-         if holders_count <= 50 {
+    }
+    for holder in &token_top_holders.list {
+        let holder_address = &holder.address;
+        let balance = holder.balance.parse::<f64>().unwrap_or_default();
+        let usd_amount = balance / 10_f64.powi(token_decimal as i32) * token_price;
+
+        top_num += 1;
+        if top_num <= 10 {
+            sum_usd_amount_top_10_holders += usd_amount;
+        }
+
+        let whale_symbol = if usd_amount > 100000.0 {
+            num_whale += 1;
+            "🐳"
+        } else if usd_amount > 50000.0 {
+            num_largefish += 1;
+            "🦈"
+        } else if usd_amount > 10000.0 {
+            num_bigfish += 1;
+            "🐬"
+        } else if usd_amount > 1000.0 {
+            num_smallfish += 1;
+            "🐟"
+        } else {
+            num_shrimp += 1;
+            "🦐"
+        };
+
+        let link = format!("<a href=\"https://apescan.io/address/{holder_address}?Amount={usd_amount}\">{whale_symbol}</a>");
+        if index_on_a_line == 9 {
+            holders_text = holders_text + &link + "\n        ";
+            index_on_a_line = 0;
+        } else {
+            holders_text = holders_text + &link;
+            index_on_a_line += 1;
+        }
+        if holders_count <= 50 {
             if top_num == holders_count {
                 holders_text += &format!("\n        🐳 ( > $100K ) :  {num_whale}\n        🦈 ( $50K - $100K ) :  {num_largefish}\n        🐬 ( $10K - $50K ) :  {num_bigfish}\n        🐟 ( $1K - $10K ) :  {num_smallfish}\n        🦐 ( $0 - $1K ) :  {num_shrimp}\n");
             }
-         } else {
+        } else {
             if top_num == 50 {
                 holders_text += &format!("\n        🐳 ( > $100K ) :  {num_whale}\n        🦈 ( $50K - $100K ) :  {num_largefish}\n        🐬 ( $10K - $50K ) :  {num_bigfish}\n        🐟 ( $1K - $10K ) :  {num_smallfish}\n        🦐 ( $0 - $1K ) :  {num_shrimp}\n");
                 break;
             }
-         }
-     }
+        }
+    }
 
     let percentage_top_10_holders = if sum_usd_amount_top_10_holders > 0.0 {
         (sum_usd_amount_top_10_holders / token_total_supply / token_price * 100.0).round()
@@ -412,21 +439,21 @@ async fn make_token_overview_message(
     //     } else if is_honeypot == "no" {
     //         audit_text += &format!("        🍯 Honeypot: ❌\n");
     //     }
-    //     if is_mintable == "yes" {  
+    //     if is_mintable == "yes" {
     //         audit_text += &format!("        🖨 Mintable: ✅\n");
     //     } else if is_mintable == "no" {
     //         audit_text += &format!("        🖨 Mintable: ❌\n");
-    //     }   
+    //     }
     //     if is_proxy == "yes" {
     //         audit_text += &format!("        🔄 Proxy: ✅\n");
     //     } else if is_proxy == "no" {
     //         audit_text += &format!("        🔄 Proxy: ❌\n");
-    //     }   
+    //     }
     //     if slippage_modifiable == "yes" {
     //         audit_text += &format!("        📊 Slippage modifiable: ✅\n");
     //     } else if slippage_modifiable == "no" {
     //         audit_text += &format!("        📊 Slippage modifiable: ❌\n");
-    //     }   
+    //     }
     //     if is_blacklisted == "yes" {
     //         audit_text += &format!("        ⛔ Blacklisted: ❗\n");
     //     } else if is_blacklisted == "no" {
@@ -444,7 +471,6 @@ async fn make_token_overview_message(
     //     }
     // }
 
- 
     let text = format!("
 <a href=\"https://dexscreener.com/apechain/{token_address}\">🚀</a> {token_name}  ${token_symbol}
 💰 USD:  ${token_price}
@@ -488,7 +514,7 @@ fn calculate_age(timestamp: &str) -> String {
         let creation = DateTime::<Utc>::from_timestamp(unix_timestamp, 0).unwrap();
         let now = Utc::now();
         let duration = now.signed_duration_since(creation);
-        
+
         let days = duration.num_days();
         if days > 365 {
             format!("{:.1} years", days as f64 / 365.0)
@@ -501,7 +527,6 @@ fn calculate_age(timestamp: &str) -> String {
         "🔥".to_string()
     }
 }
-
 
 async fn get_native_token_price() -> Result<NativeToken, serde_json::Error> {
     let client = Client::new();

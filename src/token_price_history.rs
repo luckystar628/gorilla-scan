@@ -2,13 +2,13 @@ use serde::Deserialize;
 use serde::Serialize;
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub struct TokenPriceHistory { 
+pub struct TokenPriceHistory {
     #[serde(rename = "statusCode")]
     pub status_code: u32,
     pub data: TokenPriceHistoryData,
 }
 
-#[derive(Default, Debug, Clone,  Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct TokenPriceHistoryData {
     pub price: f64,
     #[serde(rename = "priceChain")]
@@ -44,8 +44,5 @@ pub struct TokenPriceHistoryData {
     #[serde(rename = "variation24h")]
     pub variation_24h: Option<f64>,
     #[serde(rename = "variationChain24h")]
-    pub variation_chain_24h: Option<f64>,   
+    pub variation_chain_24h: Option<f64>,
 }
-
-
-
